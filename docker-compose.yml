@@ -23,18 +23,9 @@ services:
       KAFKA_ADVERTISED_HOST_NAME: kafka
       KAFKA_ADVERTISED_PORT: 9092
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_CREATE_TOPICS: "event"
+      KAFKA_CREATE_TOPICS: "events"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
-  streamsets:
-    image: streamsets/datacollector
-    restart: on-failure
-    ports:
-      - "18630:18630"
-    volumes:
-      - data-streamsets:/data
-
 volumes:
   data-mysql:
-  data-streamsets:

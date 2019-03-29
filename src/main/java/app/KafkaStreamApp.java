@@ -11,11 +11,11 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.kstream.*;
+import service.UserDBService;
 import util.serde.StreamsSerdes;
 
 import java.time.Duration;
 import java.util.Properties;
-
 
 
 @Log
@@ -26,8 +26,8 @@ public class KafkaStreamApp {
     public static void main(String[] args) {
 
         Serde<String> stringSerde = Serdes.String();
-        Serde<PaymentTransaction> paymentTransactionSerde  = new StreamsSerdes.PaymentTransactionSerde();
-        Serde<TransactionVolume> transactionVolumeSerde  = new StreamsSerdes.TransactionVolumeSerde();
+        Serde<PaymentTransaction> paymentTransactionSerde = new StreamsSerdes.PaymentTransactionSerde();
+        Serde<TransactionVolume> transactionVolumeSerde = new StreamsSerdes.TransactionVolumeSerde();
 
         StreamsConfig streamsConfig = new StreamsConfig(getProperties());
         StreamsBuilder builder = new StreamsBuilder();
@@ -35,11 +35,15 @@ public class KafkaStreamApp {
         KTable<Windowed<TransactionVolume>, Long> transactionCounts = builder
                 .stream(PAYMENT_POST_TRANSACTION_TOPIC, Consumed.with(stringSerde, paymentTransactionSerde)
                         .withOffsetResetPolicy(Topology.AutoOffsetReset.LATEST))
+                .filter((k, v) -> v != null)
                 .groupBy((k, v) -> TransactionVolume.newBuilder(v).build(), Serialized.with(transactionVolumeSerde, paymentTransactionSerde))
                 .windowedBy(TimeWindows.of(Duration.ofSeconds(10)))
                 .count();
 
-        transactionCounts.toStream().peek((k, v) -> log.info("User id: " + k.key().getUser_id() + " Count: " + v));
+        transactionCounts.toStream()
+                .peek((k, v) -> log.info("User id: " + k.key().getUser_id() + " Count: " + v))
+                .foreach((k, v) -> UserDBService.addDataToDB(k.key().getUser_id(), v));
+
 
         log.info("Starting example...");
 

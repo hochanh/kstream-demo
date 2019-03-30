@@ -32,18 +32,18 @@ public class KafkaStreamApp {
         StreamsConfig streamsConfig = new StreamsConfig(getProperties());
         StreamsBuilder builder = new StreamsBuilder();
 
-        KTable<Windowed<TransactionVolume>, Long> transactionCounts = builder
+        KTable<Windowed<String>, TransactionVolume> transactionCounts = builder
                 .stream(PAYMENT_POST_TRANSACTION_TOPIC, Consumed.with(stringSerde, paymentTransactionSerde)
                         .withOffsetResetPolicy(Topology.AutoOffsetReset.LATEST))
                 .filter((k, v) -> v != null)
-                .groupBy((k, v) -> TransactionVolume.newBuilder(v).build(), Serialized.with(transactionVolumeSerde, paymentTransactionSerde))
+                .mapValues(k -> TransactionVolume.newBuilder(k).build())
+                .groupBy((k, v) -> v.getUser_id(), Serialized.with(stringSerde, transactionVolumeSerde))
                 .windowedBy(TimeWindows.of(Duration.ofSeconds(10)))
-                .count();
+                .reduce(TransactionVolume::sum);
 
         transactionCounts.toStream()
-                .peek((k, v) -> log.info("User id: " + k.key().getUser_id() + " Count: " + v))
-                .foreach((k, v) -> UserDBService.addDataToDB(k.key().getUser_id(), v));
-
+                .peek((k, v) -> log.info("User id: " + k.key() + " Count: " + v.getCount()))
+                .foreach((k, v) -> UserDBService.addDataToDB(k.key(), v.getCount()));
 
         log.info("Starting example...");
 
